@@ -1,4 +1,4 @@
-import numpy  as np
+import numpy as np
 import pandas as pd
 
 class PreisOrderBook:
@@ -64,7 +64,7 @@ class PreisOrderBook:
                     #
                     # Update Order Sizes
                     orderSize = orderSize - bidSize
-                    limitOrderBook.orderBook.iloc[bidIndex, 0] = bidSize - orderSize
+                    limitOrderBook.orderBook.iloc[bidIndex, 0] = bidSize - 1
 
                 else:
 
@@ -102,15 +102,12 @@ class PreisOrderBook:
                 if askSize > orderSize:
 
                     # Update Order Sizes
+                    limitOrderBook.orderBook.iloc[askIndex, 0] = askSize - 1  # WHY?
                     orderSize = orderSize - askSize
-                    limitOrderBook.orderBook.iloc[askIndex, 0] = askSize - orderSize  # WHY?
 
                 else:
                     # Update Trade Flag
                     limitOrderBook.orderBook.iloc[askIndex, 3] = 1
-
-                    # Update Order Size
-                    orderSize = orderSize - askSize
 
                     # Update Index of Best Ask
                     askIndex = askIndex + 1
@@ -120,6 +117,9 @@ class PreisOrderBook:
 
                     # Update Number of Sell Orders
                     limitOrderBook.numSell = limitOrderBook.numSell - 1
+
+                    # Update Order Size
+                    orderSize = orderSize - askSize
 
         # Remove Executed Orders
         limitOrderBook.orderBook = limitOrderBook.orderBook.loc[limitOrderBook.orderBook["tradeFlag"] != 1]
@@ -147,13 +147,20 @@ class PreisOrderBook:
                 # Obtain number of buy orders with a lower price
                 lowerOrders = limitOrderBook.orderBook["limitOrderPrice"] < limitPrice
                 buyOrders = limitOrderBook.orderBook["limitOrderType"] == 2
-                lowerBuyOrders = np.sum(np.array([lowerOrders]) * np.array([buyOrders]))  # WHY?
+
+                lowerBuyOrders = int(np.floor(np.sum(lowerOrders.values * buyOrders.values)))  # WHY?
 
                 # Insert Order
-                limitOrderBook.orderBook = pd.DataFrame(np.insert(
-                    limitOrderBook.orderBook.values, lowerBuyOrders, order, axis=0),
-                    columns=["limitOrderSize", "limitOrderPrice",
-                             "limitOrderType", "tradeFlag"])
+                if lowerBuyOrders > 0:
+                    limitOrderBook.orderBook = pd.DataFrame(np.insert(
+                        limitOrderBook.orderBook.values, lowerBuyOrders, order, axis=0),
+                        columns=["limitOrderSize", "limitOrderPrice",
+                                 "limitOrderType", "tradeFlag"])
+                else:
+                    store = np.concatenate([np.matrix([order]), limitOrderBook.orderBook.values], axis=0)
+                    limitOrderBook.orderBook = pd.DataFrame(store,
+                                                            columns=["limitOrderSize", "limitOrderPrice",
+                                                                     "limitOrderType", "tradeFlag"])
 
             # Update number of buy orders
             limitOrderBook.numBuy = limitOrderBook.numBuy + 1
@@ -182,15 +189,22 @@ class PreisOrderBook:
                 # number of sell orders with a higher price:
                 higherOrders = limitOrderBook.orderBook["limitOrderPrice"] > limitPrice
                 sellOrders = limitOrderBook.orderBook["limitOrderType"] == 1
-                higherSellOrders = np.sum(np.array([higherOrders] * np.array([sellOrders])))
+
+                higherSellOrders = int(np.floor(np.sum(higherOrders.values*sellOrders.values)))
 
                 # place order in correct location
                 # Insert order:
-                limitOrderBook.orderBook = pd.DataFrame(np.insert(
-                    limitOrderBook.orderBook.values,
-                    limitOrderBook.orderBook.shape[0] - higherSellOrders, order, axis=0),
-                    columns=["limitOrderSize", "limitOrderPrice",
-                             "limitOrderType", "tradeFlag"])
+                if higherSellOrders > 0:
+                    limitOrderBook.orderBook = pd.DataFrame(np.insert(
+                        limitOrderBook.orderBook.values,
+                        (limitOrderBook.orderBook.shape[0] - higherSellOrders), order, axis=0),
+                        columns=["limitOrderSize", "limitOrderPrice",
+                                 "limitOrderType", "tradeFlag"])
+                else:
+                    store = np.concatenate([limitOrderBook.orderBook.values, np.matrix([order])], axis=0)
+                    limitOrderBook.orderBook = pd.DataFrame(store,
+                                                            columns=["limitOrderSize", "limitOrderPrice",
+                                                                     "limitOrderType", "tradeFlag"])
 
             # Update number of sell orders
             limitOrderBook.numSell = limitOrderBook.numSell + 1
@@ -199,5 +213,3 @@ class PreisOrderBook:
             if (limitPrice < limitOrderBook.bestAsk) | (limitOrderBook.bestAsk == 0):
                 # Update best ask
                 limitOrderBook.bestAsk = limitPrice
-
-

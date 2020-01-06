@@ -6,11 +6,8 @@ Created on Tue Oct 15 10:55:27 2019
 """
 
 import numpy as np
-import pandas as pd
-import math 
-import pdb
+import math
 
-import nbimporter
 from preisOrderBookSeed import PreisOrderBook
 
 
@@ -18,7 +15,7 @@ class PreisModel:
     # Single complete Preis model iteration
     
     # Attributes
-    def __init__(self, N_A, delta, lambda_0, C_lambda, delta_S, p_0, alpha, mu, T, MC, ranSeq):
+    def __init__(self, N_A, delta, mu, alpha, lambda_0, C_lambda, delta_S, p_0, T, MC):
         # Trader population attributes:
         self.N_A = N_A               # number of liquidity providers = takers = N_A
         
@@ -51,7 +48,6 @@ class PreisModel:
         self.T = T                         # timehorizon
         self.MC = MC                       # MC steps to estimate standard dev of q_taker
         self.tradeSigns = []     # series of trade signs
-        self.ranSeq = ranSeq
         self.u01 = None
         
 # Update limit order buy probability
@@ -68,10 +64,11 @@ class PreisModel:
             p_up = p_revert
         
         else:
-            p_up = 1-p_revert
 
+            # above the mean, down move more likely:
+            p_up = 1-p_revert
         
-        if self.u01 <= p_up:
+        if np.random.random(1) <= p_up:
             self.q_taker = q_current + self.delta_S
         else:
             self.q_taker = q_current - self.delta_S
@@ -89,12 +86,10 @@ class PreisModel:
         self.q_provider = 1/2
         self.q_taker = 1/2
 
-        
-        self.q_taker_sim = np.zeros((self.MC,1))
+        self.q_taker_sim = np.zeros((self.MC, 1))
         
         for i in range(self.MC):
-            self.u01 = self.ranSeq[0]
-            self.ranSeq = self.ranSeq[1:]
+            self.u01 = np.random.random(1)
             self.incrementTakerRandomWalk()
             self.q_taker_sim[i,] = self.q_taker - 0.5
 
@@ -105,18 +100,12 @@ class PreisModel:
         self.q_taker = 1/2
         
         self.limitOrderBook = PreisOrderBook()
-        #self.limitOrderBoook = PreisOrderBook()
+
         self.limitOrderBook.bestAsk = self.p_0
         self.limitOrderBook.bestBid = self.p_0
         
-        self.intradayPrice = np.zeros((self.T,1))
-        #self.p_0 = p_0
-        
-        #self.alpha = alpha
-        #self.mu = mu
-        
-        #self.T = T
-        #self.tradeSigns = []
+        self.intradayPrice = np.zeros((self.T, 1))
+
         
     def calcProviderLimitPrice(self, u01, u02):
         # function to determine limit order price
@@ -124,7 +113,7 @@ class PreisModel:
         # buy rand <= q_provider then buy
         if u01 <= self.q_provider:
             
-            eta = math.floor(-self.lambda_t* math.log(u02))
+            eta = np.floor(-self.lambda_t* math.log(u02))
             
             # set buy limit price
            
@@ -135,7 +124,7 @@ class PreisModel:
         
         else:
             
-            eta = math.floor(-self.lambda_t * math.log(u02))
+            eta = np.floor(-self.lambda_t * math.log(u02))
             
             # set sell limit price
             limitPrice = self.limitOrderBook.bestBid + 1 + eta
@@ -163,7 +152,7 @@ class PreisModel:
         # differentiate between trader types (provider and taker)
         if traderType == 1: # liquidity provider (limit order)
             [limitPrice,buyFlag]  = self.calcProviderLimitPrice(u01, u02) 
-            #bestBid for LOs not updating properly silly 
+            # bestBid for LOs not updating properly silly
             # place limit order
             self.limitOrderBook.limitOrder(buyFlag,orderSize,limitPrice)
             
@@ -197,14 +186,13 @@ class PreisModel:
         # fill orderbook before trading starts with LOs
         
         # Extract random numbers for placing limit orders
-        numInit = math.floor(self.N_A*10*self.alpha)
+        numInit = int(np.floor(self.N_A*10*self.alpha))
         
         for i in range(numInit): # num traders *10* rate of trading
             
             # place orders
-            u01 = self.ranSeq[0]
-            u02 = self.ranSeq[1]
-            self.ranSeq = self.ranSeq[2:]
+            u01 = np.random.random(1)
+            u02 = np.random.random(1)
             self.placeOrder(1, u01, u02) # 1 being provider
         
             
@@ -212,19 +200,18 @@ class PreisModel:
         # simulate trading for T MC steps 
         
         # simulate intial orders of:
-        numLimitOrders = math.floor(self.N_A*self.alpha)
-        numMarketOrders = math.floor(self.N_A*self.mu)
+        numLimitOrders = int(np.floor(self.N_A*self.alpha))
+        numMarketOrders = int(np.floor(self.N_A*self.mu))
         
         # simulate time series of T MC steps
         for i in range(self.T):
-                      
+
             # providers place new Limit Orders
             for j in range(numLimitOrders):
                 
                 # Random numbers extract
-                u01 = self.ranSeq[0]
-                u02 = self.ranSeq[1]
-                self.ranSeq = self.ranSeq[2:]
+                u01 = np.random.random(1)
+                u02 = np.random.random(1)
                 
                 # place Limit Order
                 
@@ -234,46 +221,42 @@ class PreisModel:
             for j in range(numMarketOrders):
                 
                 # Random numbers extract
-                u01 = self.ranSeq[0]
-                self.ranSeq = self.ranSeq[1:]
+                u01 = np.random.random(1)
                 
                 # place market order
                 self.placeOrder(2, u01, u01)
-            
-            
+
+
             # Random numbers extract
-            uSeq = self.ranSeq[:self.limitOrderBook.orderBook.shape[0]]
-            self.ranSeq = self.ranSeq[self.limitOrderBook.orderBook.shape[0]:]
+            uSeq = np.random.random(self.limitOrderBook.orderBook.shape[0])
             
             # determine orders to be kept: (if greater than delta then avoids removing)
             keepIndices = uSeq > self.delta
-        
+
             # update number of buy orders
             self.limitOrderBook.numBuy = self.limitOrderBook.numBuy - sum(
-            np.array(self.limitOrderBook.orderBook["limitOrderType"].iloc[keepIndices==0] == 2))
+            np.array(self.limitOrderBook.orderBook["limitOrderType"].iloc[keepIndices == 0] == 2))
         
             # update number of sell orders
             self.limitOrderBook.numSell = self.limitOrderBook.numSell - sum(
-            self.limitOrderBook.orderBook["limitOrderType"].iloc[keepIndices ==0] == 1)
+            np.array(self.limitOrderBook.orderBook["limitOrderType"].iloc[keepIndices == 0] == 1))
         
             # cancel orders
-            self.limitOrderBook.orderBook = self.limitOrderBook.orderBook.iloc[keepIndices==1,]
-        
-        
+            self.limitOrderBook.orderBook = self.limitOrderBook.orderBook.iloc[keepIndices == 1, ]
+
             # update best bid
-            if self.limitOrderBook.numBuy != 0:
+            if self.limitOrderBook.numBuy > 0:
                 self.limitOrderBook.bestBid = self.limitOrderBook.orderBook["limitOrderPrice"].iloc[(self.limitOrderBook.numBuy-1)]
             else:
                 self.limitOrderBook.bestBid = 0
 
             # update best ask
-            if self.limitOrderBook.numSell != 0:
+            if self.limitOrderBook.numSell > 0:
                 self.limitOrderBook.bestAsk = self.limitOrderBook.orderBook["limitOrderPrice"].iloc[self.limitOrderBook.numBuy]
             else:
                 self.limitOrderBook.bestAsk = 0 
 
             # Update price (mid-price)
-            #pdb.set_trace()
             if (self.limitOrderBook.bestBid !=0) & (self.limitOrderBook.bestAsk !=0):
                 self.intradayPrice[i,] = (self.limitOrderBook.bestBid + self.limitOrderBook.bestAsk)/2
             elif i>0:
@@ -281,17 +264,12 @@ class PreisModel:
             else:
                 self.intradayPrice[i,] = self.p_0
 
-            # update taker buy probability
-            # Random numbers extract
-            self.u01 = self.ranSeq[0]
-           
-            self.ranSeq = self.ranSeq[1:]
             self.incrementTakerRandomWalk()
 
             # update order placement depth
             self.incrementPlacementDepth()
-        
-    
+
+
     def sampleAutoCorrelation(self, series, lags):
         # autocorrelaion for a given series and a desired number of lags
         
