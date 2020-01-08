@@ -9,16 +9,14 @@ from tempfile import gettempdir
 from pyabc import MedianEpsilon, \
     LocalTransition, Distribution, RV, ABCSMC, sge, \
     AdaptivePNormDistance, PNormDistance, UniformAcceptor
-from pyabc.sampler import MappingSampler
-from pyabc.sampler import MulticoreParticleParallelSampler
 from pyabc.sampler import MulticoreEvalParallelSampler
 import time
 
 # Set version number each iteration
-version_number = "AdaptivePNormDistance" + str(time.time())
+version_number = "PNormDistance" + str(time.time())
 
 # SMCABC parameters:
-SMCABC_distance = AdaptivePNormDistance(p=2)
+SMCABC_distance = PNormDistance(p=2)
 SMCABC_population_size = 30
 SMCABC_sampler = MulticoreEvalParallelSampler(40)
 SMCABC_transitions = LocalTransition(k_fraction=.3)
@@ -148,20 +146,6 @@ def sum_stat_sim(parameters):
     # summary statistics
     return all_summary_stats(price_path, p_true)
 
-    # return {"mean": summary_statistics["mean"],
-    #         "std": summary_statistics["std"],
-    #         # "min": summary_statistics.loc["min"],
-    #         # "25%": summary_statistics.loc["25%"],
-    #         # "50%": summary_statistics.loc["50%"],
-    #         # "75%": summary_statistics.loc["75%"],
-    #         # "max": summary_statistics.loc["max"],
-    #         "skew": summary_statistics["skew"],
-    #         "kurt": summary_statistics["kurt"],
-    #         "hurst": summary_statistics["hurst"],
-    #         "KS": summary_statistics["KS"]
-    #         }
-
-
 
 # Parameters as Random Variables
 prior = Distribution(delta=RV("uniform", delta_min, delta_max),
@@ -179,10 +163,6 @@ param_true = {"delta": delta_true,
               "C_lambda": C_lambda_true,
               "delta_S": delta_S_true}
 
-# Simulate "true" summary statistics
-p_true = preisSim(param_true)
-p_true.to_csv(os.path.join("/home/gsnkel001/master_dissertation/StoreDB", version_number + 'p_true.csv'), index=False)
-p_true_SS = all_summary_stats(p_true, p_true)
 
 # define distance function
 def distance(simulation, data):
@@ -197,18 +177,29 @@ def distance(simulation, data):
     return dist
 
 
-# Initialise ABCSMC model parameters
-abc = ABCSMC(models=sum_stat_sim,
-             parameter_priors=prior,
-             distance_function=SMCABC_distance,
-             population_size=SMCABC_population_size,
-             sampler=SMCABC_sampler,
-             transitions=SMCABC_transitions,
-             eps=SMCABC_eps,
-             acceptor=UniformAcceptor(use_complete_history=True))
+if __name__ == '__main__':
 
-# Set up SQL storage facility
-db = "sqlite:///" + os.path.join("/home/gsnkel001/master_dissertation/StoreDB", "test" + version_number + ".db")
+    # Simulate "true" summary statistics
+    p_true = preisSim(param_true)
+    p_true.to_csv(os.path.join("/home/gsnkel001/master_dissertation/StoreDB", version_number + 'p_true.csv'), index=False)
+    p_true_SS = all_summary_stats(p_true, p_true)
 
-# Input SMCABC SQL and observed summary stats
-abc.new(db, p_true_SS)
+
+
+
+
+    # Initialise ABCSMC model parameters
+    abc = ABCSMC(models=sum_stat_sim,
+                 parameter_priors=prior,
+                 distance_function=SMCABC_distance,
+                 population_size=SMCABC_population_size,
+                 sampler=SMCABC_sampler,
+                 transitions=SMCABC_transitions,
+                 eps=SMCABC_eps)#,
+                 #acceptor=UniformAcceptor(use_complete_history=True))
+
+    # Set up SQL storage facility
+    db = "sqlite:///" + os.path.join("/home/gsnkel001/master_dissertation/StoreDB", "test" + version_number + ".db")
+
+    # Input SMCABC SQL and observed summary stats
+    abc.new(db, p_true_SS)
