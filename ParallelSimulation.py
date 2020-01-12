@@ -3,13 +3,36 @@ import pandas as pd
 import time
 import pathos.multiprocessing as mp
 
-from SMC_ABC_init import div_path, L, p_0, MCSteps, N_A, \
-    delta_min, mu_min, alpha_min, lambda0_min, C_lambda_min, deltaS_min, \
-    delta_max, mu_max, alpha_max, lambda0_max, C_lambda_max, deltaS_max # , \
-    #delta_true, mu_true, alpha_true, lambda0_true, C_lambda_true, delta_S_true, \
+# from SMC_ABC_init import div_path, L, p_0, MCSteps, N_A, \
+#     delta_min, mu_min, alpha_min, lambda0_min, C_lambda_min, deltaS_min, \
+#     delta_max, mu_max, alpha_max, lambda0_max, C_lambda_max, deltaS_max # , \
+#     #delta_true, mu_true, alpha_true, lambda0_true, C_lambda_true, delta_S_true, \
 
+div_path = 1000
 #N_A = 250 # override
-#L = 2300 # override
+L = 2300                    # override
+MCSteps = 10 ** 5           # MC steps to generate variance
+N_A = 125                   # no. market makers = no. liquidity providers
+N = 500
+
+p_0 = 238.745 * div_path
+
+# True price trajectory
+delta_true = 0.0250       # limit order cancellation rate
+mu_true = 0.0250          # rate of market orders
+alpha_true = 0.15         # rate of limit orders
+lambda0_true = 100        # initial order placement depth
+C_lambda_true = 10        # limit order placement depth coefficient
+delta_S_true = 0.0010     # mean reversion strength parameter
+
+# prior range
+delta_min, delta_max = 0, 0.05
+mu_min, mu_max = 0, 0.05
+alpha_min, alpha_max = 0.05, 0.5
+lambda0_min, lambda0_max = 50, 300
+C_lambda_min, C_lambda_max = 5, 50
+deltaS_min, deltaS_max = 0, 0.05
+
 
 def priorSimulation(numberSim):
     # generate numberSim simultations of each parameter
@@ -51,7 +74,7 @@ class ParallelModel:
         # Simulate price path for T=L time-steps
         p.simulate()
 
-        return pd.DataFrame(p.intradayPrice/ div_path)
+        return pd.DataFrame(p.intradayPrice)
 
     def f(self, x):
         return self.preisSim(*x)
@@ -63,7 +86,7 @@ if __name__ == '__main__':
     # 1. s() = I()
     # 2. Compute s(y_obs) = y_obs
     L = L  # TimeHorizon
-    N = 500    # number of simulated y_obs
+    N = N    # number of simulated y_obs
     p_0 = p_0
     MCSteps = MCSteps
     N_A = N_A
@@ -82,9 +105,9 @@ if __name__ == '__main__':
         )
 
     results_df = pd.concat(results_list, axis=1)
-    results_df = results_df.div(1000)
+    results_df = results_df.div(div_path)
 
     param = pd.DataFrame(param)
-    param.to_csv('param3.csv', index=False)
-    results_df.to_csv('out3.csv', index=False)
+    param.to_csv('param_test.csv', index=False)
+    results_df.to_csv('out_test.csv', index=False)
     print(time.asctime())

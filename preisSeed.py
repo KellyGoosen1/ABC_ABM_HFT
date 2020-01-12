@@ -270,6 +270,7 @@ class PreisModel:
             self.incrementPlacementDepth()
 
 
+
     def sampleAutoCorrelation(self, series, lags):
         # autocorrelaion for a given series and a desired number of lags
         
