@@ -112,3 +112,6 @@ dmypy.json
 # data folder
 /data
 
+# python notebooks
+/.ipynb_checkpoints
+
